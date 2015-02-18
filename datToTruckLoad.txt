@@ -31,14 +31,27 @@
                     <th>Job Name</th>
                     <th>Inbound Load #</th>
                     <th>Load Number</th>
+                    <th>Pallets</th>
+                    <th>UPSP Dest.</th>
                 </tr>
             </thead>
+            <tfoot>
+                <tr>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th id="palletsTotal" style="text-align: right;">Total:</th>
+                    <th></th>
+                </tr>
+            </tfoot>
         </table>
         <br />
     </div>
 
         <div id="convertToTruckLoadDialog" title="Import to Recieving/Arriving">
             <h3 id="jobNumber"></h3>
+            <div id="waitMessage"></div>
             <table>
                 <tr>
                     <td>NPL FAC:</td>
@@ -120,6 +133,8 @@ $(document).ready(function () {
                                 "<FieldRef Name='Job_x0020_Name'/>" +
                                 "<FieldRef Name='Inbound_x0020_Load_x0023_'/>" +
                                 "<FieldRef Name='Truck_x0020_Manifest_x0020_ID'/>" +
+                                "<FieldRef Name='Quantity'/>" +
+                                "<FieldRef Name='Drop_x0020_Site_x0020_Name'/>" +
                                 "</ViewFields>",
             CAMLQuery: "<Query>" +
                             "<Where>" +
@@ -135,7 +150,9 @@ $(document).ready(function () {
                         nplPro: $(this).attr("ows_Pro_x0020_Number"),
                         jobName: $(this).attr("ows_Job_x0020_Name"),
                         inboundLoadNumber: $(this).attr("ows_Job_x0020_Name"),
-                        proNumber: $(this).attr("ows_Truck_x0020_Manifest_x0020_ID")
+                        proNumber: $(this).attr("ows_Truck_x0020_Manifest_x0020_ID"),
+                        pallets: $(this).attr("ows_Quantity").split('.')[0],
+                        destination: $(this).attr("ows_Drop_x0020_Site_x0020_Name")
                     });
                     idArray.push($(this).attr("ows_ID"));
                 });
@@ -147,14 +164,23 @@ $(document).ready(function () {
     }
 
     function populateTable(jData) {
-       for(i=0; i < jData.rowData.length; ++i){
+        var totalPallets = 0;
+
+        for (i = 0; i < jData.rowData.length; ++i) {
             $("#datFileDataTable").dataTable().fnAddData([
                 jData.rowData[i].nplPro,
                 jData.rowData[i].jobName,
                 jData.rowData[i].inboundLoadNumber,
-                jData.rowData[i].proNumber
+                jData.rowData[i].proNumber,
+                jData.rowData[i].pallets,
+                jData.rowData[i].destination
             ]);
+
+            if (jData.rowData[i].pallets) {
+                totalPallets += parseInt(jData.rowData[i].pallets);
+            }
         }
+        $("#palletsTotal").html("Total: " + totalPallets);
     }
 
     function validateData(jData) {
@@ -207,9 +233,12 @@ $(document).ready(function () {
         loadNumber = $("#autoGenLoadNumber").text();
         trckNumber = $("#truckNumber option:selected").text();
         var customerName = parseCustomerName(clientName);
+        var waitMessage = "<table width='100%' align='center'><tr><td align='center'><img src='/_layouts/images/gears_an.gif'/></td></tr></table>",
+            convertToTruckLoadDialog = $("#convertToTruckLoadDialog").html();
+        $("#convertToTruckLoadDialog").html(waitMessage);
 
         //for (i = 0; i < ids.length; ++i) {
-        async.each(ids, function (id, callback) {
+        async.eachSeries(ids, function (id, callback) {
             $().SPServices({
                 operation: "UpdateListItems",
                 async: true,
@@ -235,7 +264,11 @@ $(document).ready(function () {
                     ["Customer_x0020_Name", customerName]
                 ],
                 completefunc: function (xData, Status) {
-                    callback();
+                    if (Status == "success") {
+                        callback();
+                    } else {
+                        callback(Status + ": " + xData);
+                    }
                 }
             });
         }, function (err) {
@@ -243,9 +276,11 @@ $(document).ready(function () {
                 $("#convertToTruckLoadDialog").dialog("close");
                 jobNumber = $("#jobNumberInput").val();
                 ids = getDatData(jobNumber);
+                $("#convertToTruckLoadDialog").html(convertToTruckLoadDialog);
 
             } else {
-                alert("UhOh, there was a problem writing data");
+                alert(err);
+                $("#convertToTruckLoadDialog").html(convertToTruckLoadDialog);
             }
         });
     }

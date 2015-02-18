@@ -139,6 +139,7 @@ try:
                             moveCMSFiles("e", pathToDatFolder, pathToFtp)
                     
                         os.remove(pathToZipFile)
+                        time.sleep(20)
 
 except Exception, err:
     print str(err)
