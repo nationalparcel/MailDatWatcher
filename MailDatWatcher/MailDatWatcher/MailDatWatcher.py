@@ -6,6 +6,28 @@ import shutil
 import time
 import smtplib
 
+#to add new clients 'Login,password,destination'
+noBolClients = [
+    "RMM,rmmport185,MKE"
+]
+
+def checkForNoBol(path):
+    for item in noBolClients:
+        client = item.split(',')
+        creds = {
+            'username': 'client=' + client[0],
+            'password': 'password=' + client[1],
+            'dest': 'dest=' + client[2]
+        }
+        if client[0].upper() in path.upper():
+            return creds
+
+    return {
+            'username': '',
+            'password': '',
+            'dest': ''
+        }
+
 def sendEmail(message, subject, to):
     try:
         sender = 'networkalerts@nationalparcel.com'
@@ -51,20 +73,25 @@ def unZipFile (filePath):
         writeToLog("Zip file error " + str(err) + "-" + filePath)
         sendEmail("Zip file error - " + str(err), "Zip File Error" + "-" + filePath, ["smccoy@nationalparcel.com", "dgriffin@nationalparcel.com"])
 
-def runCSMToFMS ():
+def runCSMToFMS (cred):
     try:
         for path, subdir, files in os.walk (pathToDatFolder):
             for filename in files:
-                if (filename.find(".hdr") != -1):
+                if (filename.lower().find(".hdr") != -1):
                     file = open(path + "\\" + filename)
                     hdrContents = file.read()
-                    if hdrContents.find("14-1") != -1:
-                        output = subprocess.Popen(["C:\\CustomApps\\MailDirectCSMToFMS\\bin\\ForteenOne\\CSMToFMS.exe"], stdout = subprocess.PIPE)
+                    if hdrContents.find("15-1") != -1:
+                        output = subprocess.Popen(['C:\\CustomApps\\MailDirectCSMToFMS\\bin\\\FifteenOne\\CSMToFMS.exe',cred['username'],cred['password'], cred['dest']], stdout = subprocess.PIPE, shell=True)
                         resualts = output.communicate()[0]
                         print resualts
                         output.terminate()
                     elif hdrContents.find("14-2") != -1:
-                        output = subprocess.Popen(["C:\\CustomApps\\MailDirectCSMToFMS\\bin\\FourteenTwo\\CSMToFMS.exe"], stdout = subprocess.PIPE)
+                        output = subprocess.Popen(['C:\\CustomApps\\MailDirectCSMToFMS\\bin\\FourteenTwo\\CSMToFMS.exe',cred['username'],cred['password'], cred['dest']], stdout = subprocess.PIPE, shell=True)
+                        resualts = output.communicate()[0]
+                        print resualts
+                        output.terminate()
+                    elif hdrContents.find("14-1") != -1:
+                        output = subprocess.Popen(['C:\\CustomApps\\MailDirectCSMToFMS\\bin\\ForteenOne\\CSMToFMS.exe',cred['username'],cred['password'], cred['dest']], stdout = subprocess.PIPE, shell=True)
                         resualts = output.communicate()[0]
                         print resualts
                         output.terminate()
@@ -74,7 +101,6 @@ def runCSMToFMS ():
                     if resualts.find("Finished") == -1:
                         resualts = "error"
 
-                    print resualts
                     file.close()
                     return resualts
 
@@ -116,12 +142,13 @@ def checkForFileLocks (path):
 
 errorEmails = ["smccoy@nationalparcel.com", "dgriffin@nationalparcel.com"]
 pathToFtp = "F:\\mailDats"
+#pathToFtp = 'C:\\Users\\Shawn\\Desktop\\TESTDATS'
 pathToDatFolder = "C:\\DATData"
 
 try:
     for path, subdir, files in os.walk(pathToFtp):
         for filename in files:
-            if filename.find(".zip") != -1 and path.find("archive") == -1 and path.lower().find("errors") == -1:
+            if filename.lower().find(".zip") != -1 and path.find("archive") == -1 and path.lower().find("errors") == -1:
                 pathToZipFile = path + "\\" + filename
                 isFileLocked = checkForFileLocks(pathToZipFile)
                 if isFileLocked == False:
@@ -132,14 +159,14 @@ try:
                         shutil.move(pathToZipFile, pathToFtp + "\\Errors\\" + filename)
                     else:
                         unZipFile( pathToZipFile )
-                        resaults = runCSMToFMS()
+                        cred = checkForNoBol(path)
+                        resaults = runCSMToFMS(cred)
                         if resaults != "error":
                             moveCMSFiles("a", pathToDatFolder, path)
                         else:
                             moveCMSFiles("e", pathToDatFolder, pathToFtp)
                     
                         os.remove(pathToZipFile)
-                        time.sleep(20)
 
 except Exception, err:
     print str(err)
